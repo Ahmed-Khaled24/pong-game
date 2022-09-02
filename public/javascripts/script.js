@@ -1,9 +1,9 @@
 // Canvas Related 
 const canvas = document.createElement('canvas');
 const context = canvas.getContext('2d');
-const socketClient = io();
+const socketClient = io('/pong');
 
-
+let isReferee = false;
 let paddleIndex = 0;
 let width = 500;
 let height = 700;
@@ -12,7 +12,8 @@ let height = 700;
 let paddleHeight = 10;
 let paddleWidth = 50;
 let paddleDiff = 25;
-let paddleX = [ 225, 225 ];
+let paddleX = [ 225/* bottom player */,
+                225/* top player */ ];
 let trajectoryX = [ 0, 0 ];
 let playerMoved = false;
 
@@ -28,7 +29,8 @@ let speedX = 0;
 let computerSpeed = 4;
 
 // Score for Both Players
-let score = [ 0, 0 ];
+let score = [ 0 /* bottom player */,
+              0 /* top player */];
 
 // Create Canvas Element
 function createCanvas() {
@@ -40,16 +42,15 @@ function createCanvas() {
 }
 
 // Wait for Opponents
-// function renderIntro() {
-//   // Canvas Background
-//   context.fillStyle = 'black';
-//   context.fillRect(0, 0, width, height);
-
-//   // Intro Text
-//   context.fillStyle = 'white';
-//   context.font = "32px Courier New";
-//   context.fillText("Waiting for opponent...", 20, (canvas.height / 2) - 30);
-// }
+function renderIntro() {
+  // Canvas Background
+  context.fillStyle = 'black';
+  context.fillRect(0, 0, width, height);
+  // Intro Text
+  context.fillStyle = 'white';
+  context.font = "32px Courier New";
+  context.fillText("Waiting for opponent...", 20, (canvas.height / 2) - 30);
+}
 
 // Render Everything on Canvas
 function renderCanvas() {
@@ -91,6 +92,7 @@ function ballReset() {
   ballX = width / 2;
   ballY = height / 2;
   speedY = 3;
+  socketClient.emit('ballMove', {ballX, ballY, score});
 }
 
 // Adjust Ball Movement
@@ -101,6 +103,7 @@ function ballMove() {
   if (playerMoved) {
     ballX += speedX;
   }
+  socketClient.emit('ballMove', {ballX, ballY, score});
 }
 
 // Determine What Ball Bounces Off, Score Points, Reset Ball
@@ -113,7 +116,7 @@ function ballBoundaries() {
   if (ballX > width && speedX > 0) {
     speedX = -speedX;
   }
-  // Bounce off player paddle (bottom)
+  // Bounce off paddle (bottom)
   if (ballY > height - paddleDiff) {
     if (ballX >= paddleX[0] && ballX <= paddleX[0] + paddleWidth) {
       // Add Speed on Hit
@@ -133,7 +136,7 @@ function ballBoundaries() {
       score[1]++;
     }
   }
-  // Bounce off computer paddle (top)
+  // Bounce off paddle (top)
   if (ballY < paddleDiff) {
     if (ballX >= paddleX[1] && ballX <= paddleX[1] + paddleWidth) {
       // Add Speed on Hit
@@ -158,37 +161,25 @@ function ballBoundaries() {
   }
 }
 
-// Computer Movement
-function computerAI() {
-  if (playerMoved) {
-    if (paddleX[1] + paddleDiff < ballX) {
-      paddleX[1] += computerSpeed;
-    } else {
-      paddleX[1] -= computerSpeed;
-    }
-    if (paddleX[1] < 0) {
-      paddleX[1] = 0;
-    } else if (paddleX[1] > (width - paddleWidth)) {
-      paddleX[1] = width - paddleWidth;
-    }
-  }
-}
-
 // Called Every Frame
 function animate() {
-  computerAI();
-  ballMove();
+  if(isReferee){
+    ballMove();
+    ballBoundaries();
+  }
   renderCanvas();
-  ballBoundaries();
   window.requestAnimationFrame(animate);
 }
 
-// Start Game, Reset Everything
-function startGame() {
+// Load Game, Reset Everything
+function loadGame() {
   createCanvas();
-  // renderIntro();
-  
-  paddleIndex = 0;
+  renderIntro();
+  socketClient.emit('ready');
+}
+ 
+function startGame() { 
+  paddleIndex = isReferee ? 1 : 0;
   window.requestAnimationFrame(animate);
   canvas.addEventListener('mousemove', (e) => {
     playerMoved = true;
@@ -199,11 +190,29 @@ function startGame() {
     if (paddleX[paddleIndex] > (width - paddleWidth)) {
       paddleX[paddleIndex] = width - paddleWidth;
     }
-    // Hide Cursor
+    socketClient.emit('paddleMove', {xPosition: paddleX[paddleIndex]});
     canvas.style.cursor = 'none';
   });
 }
 
 // On Load
-startGame();
+loadGame();
+
+socketClient.on('startGame', (refereeId)=>{
+  refereeId === socketClient.id ? isReferee = true : isReferee = false;
+  startGame();
+});
+
+socketClient.on('ballMove', (ballData) => {
+  if(isReferee)
+    console.log('referee')
+  else 
+    console.log('not referee');
+  ({ballX, ballY, score} = ballData);
+});
+
+socketClient.on('paddleMove', (paddleData)=>{
+  const otherPaddleIndex = 1 - paddleIndex; //toggle 1 to 0 and 0 to 1.
+  paddleX[otherPaddleIndex] = paddleData.xPosition;
+});
 
