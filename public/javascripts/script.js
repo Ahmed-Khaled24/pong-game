@@ -1,8 +1,10 @@
 // Canvas Related 
 const canvas = document.createElement('canvas');
 const context = canvas.getContext('2d');
-let paddleIndex = 0;
+const socketClient = io();
 
+
+let paddleIndex = 0;
 let width = 500;
 let height = 700;
 
