@@ -7,7 +7,7 @@ const onConnection = require('./socket');
 const httpServer = createServer(app);
 const socketServer = io(httpServer);
 
-httpServer.listen(3000, ()=>{
+httpServer.listen(process.env.PORT || 3000, ()=>{
     console.log('server is listening on port 3000');
 });
 configSockets(socketServer);
